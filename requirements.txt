@@ -1,5 +1,8 @@
-streamlit==1.32.0
-pandas==2.2.1
-xgboost==2.0.3
-shap==0.45.0
-# Add your specific LLM SDK here (e.g., openai or google-generativeai)
+streamlit>=1.32
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+xgboost>=2.0
+shap>=0.45
+joblib>=1.3
+plotly>=5.0
