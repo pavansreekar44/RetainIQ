@@ -404,6 +404,107 @@ def predict_from_dataframe(
 
 
 # ---------------------------------------------------------------------------
+# Drop-in Replacements for mock_data.py
+# ---------------------------------------------------------------------------
+
+_GLOBAL_MODEL = None
+_GLOBAL_ENCODERS = None
+_GLOBAL_METADATA = None
+_SHAP_EXPLAINER = None
+_DATASET_CACHE = None
+
+def _ensure_model_loaded():
+    global _GLOBAL_MODEL, _GLOBAL_ENCODERS, _GLOBAL_METADATA, _SHAP_EXPLAINER
+    if _GLOBAL_MODEL is None:
+        _GLOBAL_MODEL, _GLOBAL_ENCODERS, _GLOBAL_METADATA = load_model()
+        
+        import shap
+        _SHAP_EXPLAINER = shap.TreeExplainer(_GLOBAL_MODEL)
+
+def _get_customer_data(customer_id: str) -> pd.DataFrame:
+    global _DATASET_CACHE
+    if _DATASET_CACHE is None:
+        _DATASET_CACHE = pd.read_csv(DEFAULT_DATA_PATH)
+    
+    # Note: Using "customerID" which is the raw dataset column name
+    customer = _DATASET_CACHE[_DATASET_CACHE["customerID"] == customer_id]
+    if customer.empty:
+        raise ValueError(f"Customer {customer_id} not found in {DEFAULT_DATA_PATH}")
+    return customer
+
+def get_real_customer_list(limit: int = 20) -> list[dict]:
+    """Returns a list of real customers to populate the UI sidebar."""
+    global _DATASET_CACHE
+    if _DATASET_CACHE is None:
+        _DATASET_CACHE = pd.read_csv(DEFAULT_DATA_PATH)
+    
+    # We sample a mix of churners and non-churners for good demo variety
+    churners = _DATASET_CACHE[_DATASET_CACHE["Churn"] == "Yes"].head(limit // 2)
+    retained = _DATASET_CACHE[_DATASET_CACHE["Churn"] == "No"].head(limit - len(churners))
+    
+    sample = pd.concat([churners, retained]).sample(frac=1, random_state=42)
+    
+    # Rename customerID to customer_id to match the mock_data shape
+    sample = sample.rename(columns={"customerID": "customer_id"})
+    return sample.to_dict("records")
+
+def get_real_churn_prediction(customer_id: str) -> dict[str, str | float | bool]:
+    """Real XGBoost ML drop-in replacement for get_mock_churn_prediction."""
+    _ensure_model_loaded()
+    df = _get_customer_data(customer_id)
+    
+    result_df = predict_from_dataframe(df, _GLOBAL_MODEL, _GLOBAL_ENCODERS, _GLOBAL_METADATA)
+    
+    return {
+        "customer_id": customer_id,
+        "churn_risk_score": float(result_df["churn_risk_score"].iloc[0]),
+        "is_high_risk": bool(result_df["is_high_risk"].iloc[0]),
+    }
+
+def get_real_shap_reasons(customer_id: str) -> list[dict[str, str | float]]:
+    """Real SHAP drop-in replacement for get_mock_shap_reasons."""
+    _ensure_model_loaded()
+    df = _get_customer_data(customer_id)
+    
+    feature_cols = _GLOBAL_METADATA["feature_columns"]
+    df_encoded, _ = encode_categoricals(df, encoders=_GLOBAL_ENCODERS, fit=False)
+    X = df_encoded[feature_cols]
+    
+    shap_values = _SHAP_EXPLAINER.shap_values(X)
+    
+    # Handle list vs array based on XGBoost/SHAP versions
+    if isinstance(shap_values, list):
+        vals = shap_values[1][0] if len(shap_values) == 2 else shap_values[0][0]
+    else:
+        vals = shap_values[0] if len(shap_values.shape) == 2 else shap_values
+        
+    feature_impacts = list(zip(feature_cols, vals))
+    
+    # Sort by positive churn impact first
+    feature_impacts.sort(key=lambda x: x[1], reverse=True)
+    
+    top_3 = feature_impacts[:3]
+    
+    reasons = []
+    for feat, impact in top_3:
+        val = df[feat].iloc[0]
+        impact_f = float(impact)
+        if impact_f > 0:
+            desc = f"Having {feat} = '{val}' increases the customer's churn probability."
+        else:
+            desc = f"Having {feat} = '{val}' helps retain the customer, but other factors offset this."
+            
+        reasons.append({
+            "feature_name": feat,
+            "impact_value": round(impact_f, 3),
+            "description": desc
+        })
+        
+    return reasons
+
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 

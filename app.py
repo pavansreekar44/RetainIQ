@@ -8,11 +8,12 @@ All data is sourced exclusively from mock_data.py.
 import streamlit as st
 import plotly.graph_objects as go
 
-from mock_data import (
-    get_mock_customer_list,
-    get_mock_churn_prediction,
-    get_mock_shap_reasons,
-    get_mock_agent_intervention,
+from mock_data import get_mock_agent_intervention
+
+from train_model import (
+    get_real_customer_list,
+    get_real_churn_prediction,
+    get_real_shap_reasons,
 )
 
 # ── Page Configuration ────────────────────────────────────────────────────────
@@ -251,7 +252,7 @@ st.markdown(
 )
 
 # ── Sidebar – Customer Selection ──────────────────────────────────────────────
-customers = get_mock_customer_list()
+customers = get_real_customer_list()
 customer_ids = [c["customer_id"] for c in customers]
 customer_lookup = {c["customer_id"]: c for c in customers}
 
@@ -274,8 +275,8 @@ with st.sidebar:
 
 # ── Fetch data for selected customer ──────────────────────────────────────────
 customer = customer_lookup[selected_id]
-prediction = get_mock_churn_prediction(selected_id)
-shap_reasons = get_mock_shap_reasons(selected_id)
+prediction = get_real_churn_prediction(selected_id)
+shap_reasons = get_real_shap_reasons(selected_id)
 
 risk_score = prediction["churn_risk_score"]
 is_high_risk = prediction["is_high_risk"]
@@ -386,7 +387,7 @@ with col2:
         font=dict(family="Inter", color="#94a3b8"),
         xaxis=dict(
             title="SHAP Impact Value",
-            titlefont=dict(size=12, color="#64748b"),
+            title_font=dict(size=12, color="#64748b"),
             gridcolor="rgba(148,163,184,0.08)",
             zeroline=False,
             range=[0, max(impact_values) * 1.35] if impact_values else [0, 1],
