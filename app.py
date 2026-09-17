@@ -8,7 +8,7 @@ All data is sourced exclusively from mock_data.py.
 import streamlit as st
 import plotly.graph_objects as go
 
-from mock_data import get_mock_agent_intervention
+from agent_engine import get_real_agent_intervention
 
 from train_model import (
     get_real_customer_list,
@@ -421,8 +421,8 @@ with col2:
 
     if run_agent:
         with st.spinner("Agent reasoning in progress..."):
-            intervention = get_mock_agent_intervention(
-                selected_id, risk_score, shap_reasons
+            intervention = get_real_agent_intervention(
+                customer, risk_score, shap_reasons
             )
 
         st.markdown(
@@ -449,6 +449,4 @@ with col2:
             unsafe_allow_html=True,
         )
 
-        # API Payload
-        st.markdown('<div class="sub-label">🔌 API Payload (Webhook Simulation)</div>', unsafe_allow_html=True)
-        st.json(intervention["api_payload"], expanded=True)
+        # Removed API payload per hackathon scope constraints
