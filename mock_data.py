@@ -8,9 +8,9 @@ between the ML pipeline, the LLM-based Agent pipeline, and the Streamlit UI.
 All functions return plain Python structures (dicts / lists of dicts) so they
 can be swapped out for real implementations later with zero UI changes.
 
-Schema is restricted to the **9 most predictive features** from the IBM Telco
-Customer Churn dataset (plus ``customer_id``) to prevent ML context bloat
-and keep the LLM agent focused.
+Schema is restricted to **7 universal subscription features** (plus
+``customer_id``) that generalise across B2B SaaS and Telecom businesses,
+preventing ML context bloat and keeping the LLM agent focused.
 
 Dataset reference: IBM Telco Customer Churn
     https://www.kaggle.com/datasets/blastchar/telco-customer-churn
@@ -22,14 +22,15 @@ from typing import Any, TypedDict
 
 
 # ---------------------------------------------------------------------------
-# Strict schema — exactly 10 keys (customer_id + 9 predictive features)
+# Strict schema — exactly 8 keys (customer_id + 7 subscription features)
 # ---------------------------------------------------------------------------
 
 class CustomerRecord(TypedDict):
     """Typed contract for a single customer row.
 
-    Keys mirror the IBM Telco dataset column names exactly so that
-    swapping mock data for real ``pandas.DataFrame.to_dict("records")``
+    Contains exactly 8 keys: ``customer_id`` plus the 7 universal
+    subscription features that generalise across B2B SaaS and Telecom.
+    Swapping mock data for real ``pandas.DataFrame.to_dict("records")``
     output requires zero transformation.
     """
 
@@ -39,9 +40,7 @@ class CustomerRecord(TypedDict):
     MonthlyCharges: float        # current monthly bill (USD)
     TotalCharges: float          # lifetime spend (USD)
     PaymentMethod: str           # "Electronic check" | "Mailed check" | "Bank transfer" | "Credit card"
-    InternetService: str         # "DSL" | "Fiber optic" | "No"
-    TechSupport: str             # "Yes" | "No" | "No internet service"
-    OnlineSecurity: str          # "Yes" | "No" | "No internet service"
+    TechSupport: str             # "Yes" | "No"
     PaperlessBilling: str        # "Yes" | "No"
 
 
@@ -57,9 +56,7 @@ _CUSTOMERS: list[CustomerRecord] = [
         "MonthlyCharges": 89.50,
         "TotalCharges": 268.50,
         "PaymentMethod": "Electronic check",
-        "InternetService": "Fiber optic",
         "TechSupport": "No",
-        "OnlineSecurity": "No",
         "PaperlessBilling": "Yes",
     },
     {
@@ -69,9 +66,7 @@ _CUSTOMERS: list[CustomerRecord] = [
         "MonthlyCharges": 42.30,
         "TotalCharges": 2030.40,
         "PaymentMethod": "Bank transfer",
-        "InternetService": "DSL",
         "TechSupport": "Yes",
-        "OnlineSecurity": "Yes",
         "PaperlessBilling": "No",
     },
     {
@@ -81,9 +76,7 @@ _CUSTOMERS: list[CustomerRecord] = [
         "MonthlyCharges": 95.75,
         "TotalCharges": 670.25,
         "PaymentMethod": "Credit card",
-        "InternetService": "Fiber optic",
         "TechSupport": "No",
-        "OnlineSecurity": "No",
         "PaperlessBilling": "Yes",
     },
     {
@@ -93,9 +86,7 @@ _CUSTOMERS: list[CustomerRecord] = [
         "MonthlyCharges": 55.00,
         "TotalCharges": 3300.00,
         "PaymentMethod": "Mailed check",
-        "InternetService": "DSL",
         "TechSupport": "Yes",
-        "OnlineSecurity": "Yes",
         "PaperlessBilling": "No",
     },
     {
@@ -105,9 +96,7 @@ _CUSTOMERS: list[CustomerRecord] = [
         "MonthlyCharges": 105.20,
         "TotalCharges": 105.20,
         "PaymentMethod": "Electronic check",
-        "InternetService": "Fiber optic",
         "TechSupport": "No",
-        "OnlineSecurity": "No",
         "PaperlessBilling": "Yes",
     },
 ]
@@ -117,7 +106,7 @@ _CUSTOMER_INDEX: dict[str, CustomerRecord] = {
     c["customer_id"]: c for c in _CUSTOMERS
 }
 
-# The 9 allowed feature keys (everything except customer_id).
+# The 7 allowed feature keys (everything except customer_id).
 # Used as a runtime guard — SHAP feature_name MUST be one of these.
 ALLOWED_FEATURE_KEYS: frozenset[str] = frozenset(
     CustomerRecord.__annotations__.keys() - {"customer_id"}
@@ -160,20 +149,8 @@ _SHAP_LIBRARY: dict[str, dict[str, Any]] = {
             "Electronic check users churn at higher rates than auto-pay users."
         ),
     },
-    "InternetService": {
-        "impact_value": 0.10,
-        "description": (
-            "Fiber optic customers show higher churn due to premium pricing."
-        ),
-    },
-    "OnlineSecurity": {
-        "impact_value": 0.09,
-        "description": (
-            "Absence of online security add-on correlates with higher churn."
-        ),
-    },
     "PaperlessBilling": {
-        "impact_value": 0.07,
+        "impact_value": 0.09,
         "description": (
             "Paperless billing customers tend to disengage and churn faster."
         ),
@@ -200,7 +177,7 @@ assert set(_SHAP_LIBRARY.keys()) <= ALLOWED_FEATURE_KEYS, (
 def get_mock_customer_list() -> list[CustomerRecord]:
     """Return the full mock customer database.
 
-    Each dictionary in the returned list contains **exactly** the 10
+    Each dictionary in the returned list contains **exactly** the 8
     contract-mandated keys defined in :class:`CustomerRecord`:
 
     * ``customer_id`` — unique string identifier
@@ -209,9 +186,7 @@ def get_mock_customer_list() -> list[CustomerRecord]:
     * ``MonthlyCharges`` — current monthly bill (USD)
     * ``TotalCharges`` — lifetime spend (USD)
     * ``PaymentMethod`` — payment channel
-    * ``InternetService`` — *DSL*, *Fiber optic*, or *No*
-    * ``TechSupport`` — *Yes*, *No*, or *No internet service*
-    * ``OnlineSecurity`` — *Yes*, *No*, or *No internet service*
+    * ``TechSupport`` — *Yes* or *No*
     * ``PaperlessBilling`` — *Yes* or *No*
 
     Returns
@@ -269,7 +244,7 @@ def get_mock_shap_reasons(customer_id: str) -> list[dict[str, str | float]]:
     """Return the top-3 SHAP feature-importance reasons for *customer_id*.
 
     Every ``feature_name`` in the returned dicts is guaranteed to be one of
-    the 9 allowed feature keys defined in :class:`CustomerRecord`.
+    the 7 allowed feature keys defined in :class:`CustomerRecord`.
 
     The features are ranked contextually based on the customer's profile
     so the story is coherent end-to-end:
@@ -318,12 +293,8 @@ def get_mock_shap_reasons(customer_id: str) -> list[dict[str, str | float]]:
                 boost = 0.10
             elif feature == "PaymentMethod" and customer["PaymentMethod"] == "Electronic check":
                 boost = 0.08
-            elif feature == "InternetService" and customer["InternetService"] == "Fiber optic":
-                boost = 0.05
-            elif feature == "OnlineSecurity" and customer["OnlineSecurity"] == "No":
-                boost = 0.06
             elif feature == "PaperlessBilling" and customer["PaperlessBilling"] == "Yes":
-                boost = 0.04
+                boost = 0.06
             elif feature == "TotalCharges" and customer["TotalCharges"] < 500.0:
                 boost = 0.07
 
@@ -479,44 +450,7 @@ def get_mock_agent_intervention(
                 "apply_to": customer_id,
             },
         },
-        "InternetService": {
-            "email": (
-                f"Dear Customer {customer_id},\n\n"
-                "As a valued fiber optic subscriber, you deserve the best rate. "
-                "We're rolling out an exclusive Fiber Loyalty bundle that gives you "
-                "faster speeds at a reduced price — saving you up to 15% monthly. "
-                "Reply or call 1-800-RETAIN to lock in this limited-time offer!"
-            ),
-            "action": (
-                f"Offer Fiber Loyalty bundle to {customer_id}. "
-                "Coordinate with Network Ops for speed-tier upgrade."
-            ),
-            "payload": {
-                "discount_code": "FIBER15",
-                "discount_percent": "15",
-                "bundle": "Fiber Loyalty",
-                "apply_to": customer_id,
-            },
-        },
-        "OnlineSecurity": {
-            "email": (
-                f"Dear Customer {customer_id},\n\n"
-                "Online threats are on the rise, and we want to keep you protected. "
-                "We're offering you 3 months of our Online Security add-on at no "
-                "extra charge — real-time threat monitoring included. Reply or call "
-                "1-800-RETAIN to activate your shield today!"
-            ),
-            "action": (
-                f"Provision complimentary Online Security add-on for {customer_id} "
-                "for 90 days. Review upsell opportunity at Day 60."
-            ),
-            "payload": {
-                "discount_code": "SECFREE90",
-                "addon": "Online Security",
-                "duration_months": "3",
-                "apply_to": customer_id,
-            },
-        },
+
         "PaperlessBilling": {
             "email": (
                 f"Dear Customer {customer_id},\n\n"
@@ -593,7 +527,7 @@ if __name__ == "__main__":
     import json
 
     print("=" * 72)
-    print("MOCK DATA — Smoke Test  (strict 9-feature schema)")
+    print("MOCK DATA — Smoke Test  (strict 7-feature schema)")
     print("=" * 72)
 
     # Verify schema compliance
