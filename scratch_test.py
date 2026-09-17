@@ -1,10 +1,10 @@
 import os
-import google.generativeai as genai
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        print(m.name)
+models = client.models.list()
+for m in models.data:
+    print(m.id)

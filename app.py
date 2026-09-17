@@ -421,9 +421,14 @@ with col2:
 
     if run_agent:
         with st.spinner("Agent reasoning in progress..."):
-            intervention = get_real_agent_intervention(
-                customer, risk_score, shap_reasons
-            )
+            try:
+                intervention = get_real_agent_intervention(
+                    customer, risk_score, shap_reasons
+                )
+            except Exception as e:
+                st.error(f"LLM API Error: {e}")
+                st.info("Ensure your Groq API key is valid and you have access to the specified model.")
+                st.stop()
 
         st.markdown(
             '<div class="agent-result">'
